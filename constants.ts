@@ -1,21 +1,21 @@
 import { Product, CollectionData, SiteConfig } from './types';
 
 export const COLLECTIONS: CollectionData[] = [
-  { 
-    name: 'Todas', 
-    description: '' 
+  {
+    name: 'Todas',
+    description: ''
   },
-  { 
-    name: 'Aurora', 
-    description: 'Inspirada en el amanecer, piezas con acabados dorados y cálidos que iluminan.' 
+  {
+    name: 'Aurora',
+    description: 'Inspirada en el amanecer, piezas con acabados dorados y cálidos que iluminan.'
   },
-  { 
-    name: 'Nocturna', 
-    description: 'Elegancia misteriosa con tonos plateados, cristales y líneas geométricas modernas.' 
+  {
+    name: 'Nocturna',
+    description: 'Elegancia misteriosa con tonos plateados, cristales y líneas geométricas modernas.'
   },
-  { 
-    name: 'Orgánica', 
-    description: 'Conexión con la naturaleza mediante formas irregulares, perlas y texturas crudas.' 
+  {
+    name: 'Orgánica',
+    description: 'Conexión con la naturaleza mediante formas irregulares, perlas y texturas crudas.'
   }
 ];
 
@@ -133,12 +133,12 @@ export const PRODUCTS: Product[] = [
 ];
 
 export const DEFAULT_SITE_CONFIG: SiteConfig = {
-  siteName: 'Lumina',
+  siteName: 'Catálogo',
   logoUrl: null,
-  footerText: '© 2024 Lumina Jewelry. Todos los derechos reservados.',
+  footerText: '© 2024. Todos los derechos reservados.',
   socialLinks: [
     { platform: 'Instagram', url: '#' },
     { platform: 'Pinterest', url: '#' },
-    { platform: 'Contacto', url: 'mailto:hola@lumina.com' }
+    { platform: 'Contacto', url: 'mailto:hola@thebrightsoul.com' }
   ]
 };

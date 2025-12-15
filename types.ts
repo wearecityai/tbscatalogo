@@ -1,4 +1,15 @@
-export type Category = 'Collares' | 'Aretes' | 'Pulseras' | 'Anillos';
+// Category is now a dynamic string
+export type Category = string;
+
+export interface CategoryData {
+  name: string;
+  description: string;
+}
+
+export interface MaterialData {
+  name: string;
+  description: string;
+}
 
 export interface CollectionData {
   name: string;
@@ -11,8 +22,8 @@ export type Collection = string;
 export interface Product {
   id: string;
   name: string;
-  category: Category;
-  collection: string; 
+  category: string; // Dynamic category
+  collection: string;
   price: string;
   description: string;
   material: string;

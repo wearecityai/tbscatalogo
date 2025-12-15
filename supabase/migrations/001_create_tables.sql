@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS products (
 -- Create site_config table (single row)
 CREATE TABLE IF NOT EXISTS site_config (
   id INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
-  site_name TEXT NOT NULL DEFAULT 'Lumina',
+  site_name TEXT NOT NULL DEFAULT 'Catálogo',
   logo_url TEXT,
   footer_text TEXT DEFAULT '',
   social_links JSONB DEFAULT '[]'::jsonb,
@@ -101,7 +101,7 @@ CREATE TRIGGER update_site_config_updated_at
 
 -- Insert default site config
 INSERT INTO site_config (id, site_name, footer_text, social_links)
-VALUES (1, 'Lumina', '© 2024 Lumina Jewelry. Todos los derechos reservados.', 
-  '[{"platform": "Instagram", "url": "#"}, {"platform": "Pinterest", "url": "#"}, {"platform": "Contacto", "url": "mailto:hola@lumina.com"}]'::jsonb)
+VALUES (1, 'Catálogo', '© 2024. Todos los derechos reservados.', 
+  '[{"platform": "Instagram", "url": "#"}, {"platform": "Pinterest", "url": "#"}, {"platform": "Contacto", "url": "mailto:hola@thebrightsoul.com"}]'::jsonb)
 ON CONFLICT (id) DO NOTHING;
 

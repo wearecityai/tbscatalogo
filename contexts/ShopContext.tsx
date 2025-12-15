@@ -1,11 +1,13 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { Product, CollectionData, SiteConfig } from '../types';
+import { Product, CollectionData, SiteConfig, CategoryData, MaterialData } from '../types';
 import { PRODUCTS as INITIAL_PRODUCTS, COLLECTIONS as INITIAL_COLLECTIONS, DEFAULT_SITE_CONFIG } from '../constants';
 import { supabase } from '../lib/supabase';
 
 interface ShopContextType {
   products: Product[];
   collections: CollectionData[];
+  categories: CategoryData[];
+  materials: MaterialData[];
   siteConfig: SiteConfig;
   addProduct: (product: Product) => void;
   updateProduct: (product: Product) => void;
@@ -13,6 +15,12 @@ interface ShopContextType {
   addCollection: (data: CollectionData) => void;
   updateCollection: (originalName: string, data: CollectionData) => void;
   deleteCollection: (name: string) => void;
+  addCategory: (data: CategoryData) => void;
+  updateCategory: (originalName: string, data: CategoryData) => void;
+  deleteCategory: (name: string) => void;
+  addMaterial: (data: MaterialData) => void;
+  updateMaterial: (originalName: string, data: MaterialData) => void;
+  deleteMaterial: (name: string) => void;
   updateSiteConfig: (config: SiteConfig) => void;
   resetToDefault: () => void;
 }
@@ -22,6 +30,8 @@ const ShopContext = createContext<ShopContextType | undefined>(undefined);
 export const ShopProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [products, setProducts] = useState<Product[]>([]);
   const [collections, setCollections] = useState<CollectionData[]>([]);
+  const [categories, setCategories] = useState<CategoryData[]>([]);
+  const [materials, setMaterials] = useState<MaterialData[]>([]);
   const [siteConfig, setSiteConfig] = useState<SiteConfig>(DEFAULT_SITE_CONFIG);
   const [isInitialized, setIsInitialized] = useState(false);
 
@@ -52,12 +62,30 @@ export const ShopProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
           setCollections(formattedCollections);
         } else {
-          // Initialize with default collections if empty
           setCollections(INITIAL_COLLECTIONS);
-          // Insert default collections
           for (const col of INITIAL_COLLECTIONS) {
             await supabase.from('collections').upsert({ name: col.name, description: col.description });
           }
+        }
+
+        // Load categories
+        const { data: categoriesData, error: categoriesError } = await supabase
+          .from('categories')
+          .select('*')
+          .order('name');
+
+        if (!categoriesError && categoriesData) {
+          setCategories(categoriesData.map(c => ({ name: c.name, description: c.description || '' })));
+        }
+
+        // Load materials
+        const { data: materialsData, error: materialsError } = await supabase
+          .from('materials')
+          .select('*')
+          .order('name');
+
+        if (!materialsError && materialsData) {
+          setMaterials(materialsData.map(m => ({ name: m.name, description: m.description || '' })));
         }
 
         // Load products
@@ -82,7 +110,6 @@ export const ShopProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           setProducts(formattedProducts);
         } else {
           setProducts(INITIAL_PRODUCTS);
-          // Insert default products
           for (const product of INITIAL_PRODUCTS) {
             await supabase.from('products').upsert({
               id: product.id,
@@ -230,211 +257,189 @@ export const ShopProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
-  const addCollection = async (data: CollectionData) => {
-    if (!collections.some(c => c.name === data.name)) {
-      // Optimistic update
-      const previousCollections = [...collections];
-      setCollections((prev) => [...prev, data]);
-
-      try {
-        const { error } = await supabase.from('collections').upsert({
-          name: data.name,
-          description: data.description
-        });
-        if (error) throw error;
-      } catch (error) {
-        console.error('Error adding collection to Supabase:', error);
-        // Revert
-        setCollections(previousCollections);
-        alert('Error al añadir la colección. Por favor intenta de nuevo.');
-      }
+  const addCollection = async (collection: CollectionData) => {
+    // Optimistic
+    setCollections(prev => [...prev, collection]);
+    try {
+      const { error } = await supabase.from('collections').insert({
+        name: collection.name,
+        description: collection.description
+      });
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error adding collection:', error);
+      setCollections(prev => prev.filter(c => c.name !== collection.name));
+      alert('Error al crear la colección');
     }
   };
 
-  const updateCollection = async (originalName: string, data: CollectionData) => {
-    // Optimistic update
-    const previousCollections = [...collections];
-    const previousProducts = [...products];
+  const updateCollection = async (originalName: string, updatedCollection: CollectionData) => {
+    // Optimistic
+    setCollections(prev => prev.map(c => c.name === originalName ? updatedCollection : c));
 
-    // 1. Update Collection Info locally
-    setCollections((prev) =>
-      prev.map(c => c.name === originalName ? data : c)
-    );
-
-    // 2. If name changed, update all associated products locally
-    if (originalName !== data.name) {
-      setProducts((prev) => prev.map(p => {
-        if (p.collection === originalName) {
-          return { ...p, collection: data.name };
-        }
-        return p;
-      }));
+    // Also update products that use this collection
+    if (originalName !== updatedCollection.name) {
+      setProducts(prev => prev.map(p => p.collection === originalName ? { ...p, collection: updatedCollection.name } : p));
     }
 
     try {
-      // Database updates
-      if (originalName !== data.name) {
-        // Create new collection first
-        const { error: createError } = await supabase.from('collections').insert({
-          name: data.name,
-          description: data.description
-        });
-        if (createError) throw createError;
+      const { error } = await supabase.from('collections')
+        .update({ name: updatedCollection.name, description: updatedCollection.description })
+        .eq('name', originalName);
 
-        // Update products to point to new collection
-        const { error: updateProductsError } = await supabase
-          .from('products')
-          .update({ collection: data.name })
-          .eq('collection', originalName);
-        if (updateProductsError) throw updateProductsError;
-
-        // Delete old collection
-        const { error: deleteError } = await supabase
-          .from('collections')
-          .delete()
-          .eq('name', originalName);
-        if (deleteError) throw deleteError;
-      } else {
-        // Just update description
-        const { error } = await supabase.from('collections').update({
-          description: data.description
-        }).eq('name', originalName);
-        if (error) throw error;
-      }
+      if (error) throw error;
     } catch (error) {
-      console.error('Error updating collection in Supabase:', error);
-      // Revert
-      setCollections(previousCollections);
-      setProducts(previousProducts);
-      alert('Error al actualizar la colección. Por favor intenta de nuevo.');
+      console.error('Error updating collection:', error);
+      // Revert is complex here, simplified for now
+      alert('Error al actualizar la colección');
     }
   };
 
   const deleteCollection = async (name: string) => {
-    if (name === 'Todas') return;
+    // Optimistic
+    setCollections(prev => prev.filter(c => c.name !== name));
+    try {
+      const { error } = await supabase.from('collections').delete().eq('name', name);
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error deleting collection:', error);
+      alert('Error al eliminar la colección');
+    }
+  };
 
-    const previousCollections = [...collections];
-    const previousProducts = [...products];
-    const fallbackCollection = collections.find(c => c.name !== 'Todas' && c.name !== name)?.name || 'Aurora';
+  // --- Categories CRUD ---
 
-    // Optimistic update
-    setCollections((prev) => prev.filter((c) => c.name !== name));
-    setProducts((prev) => prev.map(p => {
-      if (p.collection === name) {
-        return { ...p, collection: fallbackCollection };
-      }
-      return p;
-    }));
+  const addCategory = async (category: CategoryData) => {
+    setCategories(prev => [...prev, category]);
+    try {
+      const { error } = await supabase.from('categories').insert(category);
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error adding category:', error);
+      setCategories(prev => prev.filter(c => c.name !== category.name));
+      alert('Error al crear la categoría');
+    }
+  };
+
+  const updateCategory = async (originalName: string, updatedCategory: CategoryData) => {
+    setCategories(prev => prev.map(c => c.name === originalName ? updatedCategory : c));
+
+    // Update products using this category
+    if (originalName !== updatedCategory.name) {
+      setProducts(prev => prev.map(p => p.category === originalName ? { ...p, category: updatedCategory.name } : p));
+    }
 
     try {
-      // Update products in Supabase
-      const { error: updateError } = await supabase
-        .from('products')
-        .update({ collection: fallbackCollection })
-        .eq('collection', name);
-
-      if (updateError) throw updateError;
-
-      // Delete collection
-      const { error: deleteError } = await supabase
-        .from('collections')
-        .delete()
-        .eq('name', name);
-
-      if (deleteError) throw deleteError;
+      const { error } = await supabase.from('categories')
+        .update(updatedCategory)
+        .eq('name', originalName);
+      if (error) throw error;
     } catch (error) {
-      console.error('Error deleting collection from Supabase:', error);
-      // Revert
-      setCollections(previousCollections);
-      setProducts(previousProducts);
-      alert('Error al eliminar la colección. Por favor intenta de nuevo.');
+      console.error('Error updating category:', error);
+      alert('Error al actualizar la categoría');
+    }
+  };
+
+  const deleteCategory = async (name: string) => {
+    setCategories(prev => prev.filter(c => c.name !== name));
+    try {
+      const { error } = await supabase.from('categories').delete().eq('name', name);
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error deleting category:', error);
+      alert('Error al eliminar la categoría');
+    }
+  };
+
+  // --- Materials CRUD ---
+
+  const addMaterial = async (material: MaterialData) => {
+    setMaterials(prev => [...prev, material]);
+    try {
+      const { error } = await supabase.from('materials').insert(material);
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error adding material:', error);
+      setMaterials(prev => prev.filter(m => m.name !== material.name));
+      alert('Error al crear el material');
+    }
+  };
+
+  const updateMaterial = async (originalName: string, updatedMaterial: MaterialData) => {
+    setMaterials(prev => prev.map(m => m.name === originalName ? updatedMaterial : m));
+
+    // Update products using this material
+    if (originalName !== updatedMaterial.name) {
+      setProducts(prev => prev.map(p => p.material === originalName ? { ...p, material: updatedMaterial.name } : p));
+    }
+
+    try {
+      const { error } = await supabase.from('materials')
+        .update(updatedMaterial)
+        .eq('name', originalName);
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error updating material:', error);
+      alert('Error al actualizar el material');
+    }
+  };
+
+  const deleteMaterial = async (name: string) => {
+    setMaterials(prev => prev.filter(m => m.name !== name));
+    try {
+      const { error } = await supabase.from('materials').delete().eq('name', name);
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error deleting material:', error);
+      alert('Error al eliminar el material');
     }
   };
 
   const updateSiteConfig = async (config: SiteConfig) => {
-    const previousConfig = siteConfig;
     setSiteConfig(config);
-
     try {
-      const { error } = await supabase.from('site_config').upsert({
-        id: 1,
-        site_name: config.siteName,
-        logo_url: config.logoUrl,
-        footer_text: config.footerText,
-        social_links: config.socialLinks
-      });
-      if (error) throw error;
+      const { data } = await supabase.from('site_config').select('id').limit(1).single();
+
+      if (data) {
+        await supabase.from('site_config').update({
+          site_name: config.siteName,
+          logo_url: config.logoUrl,
+          footer_text: config.footerText,
+          social_links: config.socialLinks
+        }).eq('id', data.id);
+      } else {
+        await supabase.from('site_config').insert({
+          site_name: config.siteName,
+          logo_url: config.logoUrl,
+          footer_text: config.footerText,
+          social_links: config.socialLinks
+        });
+      }
     } catch (error) {
-      console.error('Error updating site config in Supabase:', error);
-      setSiteConfig(previousConfig);
-      alert('Error al actualizar la configuración. Por favor intenta de nuevo.');
+      console.error('Error updating site config:', error);
     }
   };
 
   const resetToDefault = async () => {
-    if (!window.confirm('¿Estás seguro de que quieres restablecer todo a los valores por defecto? Esto borrará todos los datos actuales.')) {
-      return;
-    }
-
-    const previousProducts = products;
-    const previousCollections = collections;
-    const previousConfig = siteConfig;
-
-    setProducts(INITIAL_PRODUCTS);
-    setCollections(INITIAL_COLLECTIONS);
-    setSiteConfig(DEFAULT_SITE_CONFIG);
+    if (!window.confirm('¿Estás seguro? Esto borrará TODOS los datos y restaurará el contenido de demostración.')) return;
 
     try {
-      // Clear and reset in Supabase
-      // Note: We need to be careful with foreign key constraints.
-      // 1. Delete all products
-      await supabase.from('products').delete().neq('id', 'placeholder'); // Delete all
-
-      // 2. Delete all collections except 'Todas' if it exists, or just all and recreate
-      // It's safer to delete collections that are NOT in the initial set, or just wipe all if possible.
-      // For simplicity in this reset function, we'll try to wipe and recreate.
-
-      // We might need to delete collections one by one or disable constraints, but RLS might block "delete all".
-      // Let's try deleting products first (done above), then collections.
+      await supabase.from('products').delete().neq('id', '0');
       await supabase.from('collections').delete().neq('name', 'placeholder');
+      await supabase.from('categories').delete().neq('name', 'placeholder');
+      await supabase.from('materials').delete().neq('name', 'placeholder');
 
-      // 3. Insert default collections
-      for (const col of INITIAL_COLLECTIONS) {
-        await supabase.from('collections').upsert({ name: col.name, description: col.description });
-      }
+      setProducts(INITIAL_PRODUCTS);
+      setCollections(INITIAL_COLLECTIONS);
+      setSiteConfig(DEFAULT_SITE_CONFIG);
 
-      // 4. Insert default products
-      for (const product of INITIAL_PRODUCTS) {
-        await supabase.from('products').upsert({
-          id: product.id,
-          name: product.name,
-          category: product.category,
-          collection: product.collection,
-          price: product.price,
-          description: product.description,
-          material: product.material,
-          image_url: product.imageUrl
-        });
-      }
+      window.location.reload();
 
-      // 5. Reset config
-      await supabase.from('site_config').upsert({
-        id: 1,
-        site_name: DEFAULT_SITE_CONFIG.siteName,
-        logo_url: DEFAULT_SITE_CONFIG.logoUrl,
-        footer_text: DEFAULT_SITE_CONFIG.footerText,
-        social_links: DEFAULT_SITE_CONFIG.socialLinks
-      });
-
-      alert('Sitio restablecido correctamente.');
     } catch (error) {
-      console.error('Error resetting to default in Supabase:', error);
-      setProducts(previousProducts);
-      setCollections(previousCollections);
-      setSiteConfig(previousConfig);
-      alert('Error al restablecer el sitio.');
+      console.error('Error resetting data:', error);
+      alert('Error al restaurar los datos');
     }
-  }
+  };
 
   if (!isInitialized) return null;
 
@@ -442,6 +447,8 @@ export const ShopProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     <ShopContext.Provider value={{
       products,
       collections,
+      categories,
+      materials,
       siteConfig,
       addProduct,
       updateProduct,
@@ -449,6 +456,12 @@ export const ShopProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       addCollection,
       updateCollection,
       deleteCollection,
+      addCategory,
+      updateCategory,
+      deleteCategory,
+      addMaterial,
+      updateMaterial,
+      deleteMaterial,
       updateSiteConfig,
       resetToDefault
     }}>

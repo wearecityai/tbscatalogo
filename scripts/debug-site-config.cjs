@@ -37,7 +37,7 @@ async function debugSiteConfig() {
             .from('site_config')
             .upsert({
                 id: 1,
-                site_name: 'Lumina Debug',
+                site_name: 'Debug',
                 logo_url: null,
                 footer_text: 'Debug Footer',
                 social_links: []
