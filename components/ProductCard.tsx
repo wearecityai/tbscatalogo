@@ -1,16 +1,17 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { Product } from '../types';
 
 interface ProductCardProps {
   product: Product;
-  onClick: (product: Product) => void;
+  onClick?: (product: Product) => void; // Optional now, or can be removed if unused
 }
 
-export const ProductCard: React.FC<ProductCardProps> = ({ product, onClick }) => {
+export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
   return (
-    <div 
+    <Link
+      to={`/producto/${product.id}`}
       className="group cursor-pointer flex flex-col gap-2 md:gap-3 fade-in"
-      onClick={() => onClick(product)}
     >
       <div className="relative overflow-hidden aspect-[3/4] bg-stone-200">
         <img
@@ -34,6 +35,6 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onClick }) =>
           {product.price}
         </p>
       </div>
-    </div>
+    </Link>
   );
 };
